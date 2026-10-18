@@ -124,6 +124,6 @@
     "test:integration": "node tests/run-vscode.js",
     "package": "npx --yes @vscode/vsce@3.6.2 package --no-dependencies",
     "package:offline": "python3 tools/build_vsix.py",
-    "test:setup": "npm install --no-save --package-lock=false --ignore-scripts @vscode/test-electron@2.5.2"
+    "test:setup": "npm install --no-save --package-lock=false --ignore-scripts @vscode/test-electron@3.1.0"
   }
 }
