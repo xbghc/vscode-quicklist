@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax and run unit tests
+        run: npm run check
+      - name: Check the offline package structure
+        if: runner.os == 'Linux'
+        run: python3 tools/test_vsix.py
+      - name: Install integration-test tooling
+        run: npm run test:setup
+      - name: Run extension-host tests on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+      - name: Run extension-host tests on Windows and macOS
+        if: runner.os != 'Linux'
+        run: npm run test:integration
+
+  package:
+    name: Package VSIX
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Package with the official VS Code extension manager
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quicklist-vsix
+          path: '*.vsix'
+          if-no-files-found: error

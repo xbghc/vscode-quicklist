@@ -1,0 +1,9 @@
+node_modules/
+.vscode-test/
+.vscode-test-data/
+dist/
+coverage/
+*.vsix
+*.log
+__pycache__/
+.DS_Store

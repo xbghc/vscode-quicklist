@@ -1,0 +1,129 @@
+{
+  "name": "quicklist",
+  "displayName": "Quicklist",
+  "description": "A minimal workspace file and folder shortcut list in Explorer.",
+  "version": "0.1.0",
+  "publisher": "xbghc",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "quicklist",
+    "shortcuts",
+    "favorites",
+    "files",
+    "explorer"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xbghc/vscode-quicklist.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xbghc/vscode-quicklist/issues"
+  },
+  "homepage": "https://github.com/xbghc/vscode-quicklist#readme",
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "quicklist",
+          "name": "Quicklist"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "quicklist",
+        "contents": "Use the + button to add the active file.\nRight-click a file or folder in Explorer and select Add to Quicklist.",
+        "when": "workspaceFolderCount > 0"
+      },
+      {
+        "view": "quicklist",
+        "contents": "Open a folder or workspace to start using Quicklist.",
+        "when": "workspaceFolderCount == 0"
+      }
+    ],
+    "commands": [
+      {
+        "command": "quicklist.addCurrentFile",
+        "title": "Add Current File",
+        "category": "Quicklist",
+        "icon": "$(add)"
+      },
+      {
+        "command": "quicklist.addFromExplorer",
+        "title": "Add to Quicklist"
+      },
+      {
+        "command": "quicklist.remove",
+        "title": "Remove from Quicklist",
+        "icon": "$(close)"
+      },
+      {
+        "command": "quicklist.refresh",
+        "title": "Refresh",
+        "category": "Quicklist",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "quicklist.addFromExplorer",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation@99"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "quicklist.addCurrentFile",
+          "when": "view == quicklist",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quicklist.refresh",
+          "when": "view == quicklist",
+          "group": "overflow@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "quicklist.remove",
+          "when": "view == quicklist && viewItem == quicklistEntry",
+          "group": "inline@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "quicklist.addFromExplorer",
+          "when": "false"
+        },
+        {
+          "command": "quicklist.remove",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js && node --check tests/run-vscode.js && node --check tests/integration/index.js && node --test tests/extension.test.js",
+    "test": "node --test tests/extension.test.js",
+    "test:integration": "node tests/run-vscode.js",
+    "package": "npx --yes @vscode/vsce@3.6.2 package --no-dependencies",
+    "package:offline": "python3 tools/build_vsix.py",
+    "test:setup": "npm install --no-save --package-lock=false --ignore-scripts @vscode/test-electron@2.5.2"
+  }
+}
