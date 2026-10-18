@@ -2,11 +2,11 @@
 
 ## Automated checks
 
-`npm run check` validates JavaScript syntax and runs dependency-free unit tests with an injected VS Code API. These cover view contributions, commands, ordering, workspace isolation, URI preservation, missing resources, failed writes, and disposal.
+`npm run check` validates JavaScript syntax and runs dependency-free unit tests with an injected VS Code API. These cover view contributions, commands, ordering, workspace isolation, URI preservation, missing resources, failed writes, and disposal. Release tests also check stable and pre-release tags, package-version matching, and rejection of malformed tags.
 
 `npm run test:setup` installs the pinned extension-host test runner without adding runtime dependencies or a lockfile. `npm run test:integration` uses real VS Code processes and a temporary profile to check activation, adding files and folders, deduplication, opening files, non-destructive removal, restart persistence, and workspace isolation. It creates and removes only its own temporary test directories.
 
-CI runs these checks on Linux, Windows, and macOS before packaging a VSIX with `@vscode/vsce`. The test runner and packager are pinned; their transitive dependencies are resolved when installed.
+CI runs these checks on Linux, Windows, and macOS before packaging a VSIX with `@vscode/vsce`. The Release workflow reuses this same CI workflow before publishing its VSIX artifact. The test runner and packager are pinned; their transitive dependencies are resolved when installed.
 
 ## Manual acceptance checks
 

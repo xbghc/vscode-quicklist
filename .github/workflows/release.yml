@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create and release, e.g. v0.1.0 or v0.1.0-alpha.1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize releases, including manual runs and tag pushes for the same version.
+concurrency:
+  group: quicklist-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check tag and package version
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: node tools/release.js
+      - name: Check publishing credential is configured
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo '::error::Add the VSCE_PAT Actions secret for the xbghc Marketplace publisher.'
+            exit 1
+          fi
+
+  ci:
+    name: Test and package
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    with:
+      prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+
+  publish:
+    name: Publish extension and GitHub release
+    needs: [prepare, ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: quicklist-vsix
+          path: release-artifacts
+      - name: Create or verify tag at the tested commit
+        run: |
+          commit="$(git rev-parse HEAD)"
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            tagged_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+            if [ "$tagged_commit" != "$commit" ]; then
+              echo '::error::The release tag already points to a different commit. Select that tag to retry, or use a new version.'
+              exit 1
+            fi
+          else
+            git tag "$RELEASE_TAG" "$commit"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+      - name: Publish tested VSIX to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          args=()
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--pre-release)
+          fi
+          npx --yes @vscode/vsce@3.6.2 publish --skip-duplicate "${args[@]}" --packagePath release-artifacts/*.vsix
+      - name: GitHub release with the published VSIX
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: release-artifacts/*.vsix
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}

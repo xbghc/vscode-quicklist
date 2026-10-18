@@ -5,13 +5,19 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      prerelease:
+        description: Package the extension for the Marketplace pre-release channel
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch') }}
 
 jobs:
   test:
@@ -52,7 +58,15 @@ jobs:
         with:
           node-version: '22'
       - name: Package with the official VS Code extension manager
-        run: npm run package
+        shell: bash
+        env:
+          PRERELEASE: ${{ inputs.prerelease || false }}
+        run: |
+          args=()
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--pre-release)
+          fi
+          npm run package -- "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: quicklist-vsix

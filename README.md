@@ -25,7 +25,7 @@ Quicklist adds a lightweight view to the Explorer sidebar, letting you keep freq
 
 ## Installation
 
-Requires VS Code 1.85 or later. The extension is distributed as a VSIX; it is not currently published to the Marketplace.
+Requires VS Code 1.85 or later. Published versions are available from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=xbghc.quicklist) and as VSIX assets on [GitHub Releases](https://github.com/xbghc/vscode-quicklist/releases).
 
 Download the `quicklist-vsix` artifact from a successful [CI run](https://github.com/xbghc/vscode-quicklist/actions/workflows/ci.yml), extract it, and run **Extensions: Install from VSIX...** in VS Code. Alternatively, build a package locally as described below.
 
@@ -72,6 +72,10 @@ npm run package:offline
 ```
 
 The offline package is written to `dist/`. CI uses the official packager. See [manual checks](docs/testing.md) for mouse interaction and remote-workspace checks.
+
+## Publishing
+
+The [Release workflow](https://github.com/xbghc/vscode-quicklist/actions/workflows/release.yml) follows the same tag-based publishing process as `vscode-nvim-marks`. Push a version tag or run it manually to test on Windows, macOS, and Linux, package a VSIX, publish it to the Marketplace, and attach it to a GitHub release. See [release setup and instructions](docs/releasing.md) for the required `VSCE_PAT` secret, version tags, pre-releases, and retries.
 
 ## Acknowledgments
 
