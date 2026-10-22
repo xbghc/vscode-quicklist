@@ -5,6 +5,7 @@
 const vscode = require('vscode');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { QuicklistView } = require('./quicklist-view');
 
 const STATE_KEY = 'quicklist.items';
 
@@ -57,11 +58,15 @@ function errorMessage(error) {
 
 function activate(context) {
   const provider = new QuicklistProvider(context.workspaceState);
-  const view = vscode.window.createTreeView('quicklist', { treeDataProvider: provider });
+  const view = new QuicklistView(vscode, provider, context.extensionUri, addWithFeedback);
 
   // Catch write failures at the command boundary, including inline removal.
   const register = (name, handler) => vscode.commands.registerCommand(name, async (...args) => {
     try {
+      if (args[0]?.quicklistItem) {
+        args[0] = provider.items.find((item) => sameItem(item, args[0].quicklistItem));
+        if (!args[0]) return undefined;
+      }
       return await handler(...args);
     } catch (error) {
       void vscode.window.showErrorMessage(`Could not update Quicklist: ${errorMessage(error)}`);
@@ -72,6 +77,7 @@ function activate(context) {
   context.subscriptions.push(
     provider,
     view,
+    vscode.window.registerWebviewViewProvider('quicklist', view),
     register('quicklist.addCurrentFile', async (group) => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.isUntitled) {
@@ -99,22 +105,12 @@ function activate(context) {
         return;
       }
       const parentId = parent?.type === 'group' ? parent.id : undefined;
-      const name = await vscode.window.showInputBox({
-        title: 'New Quicklist Folder', prompt: 'Name this folder for organizing shortcuts.',
-        validateInput: (value) => provider.validateGroupName(value, parentId),
-      });
-      if (name === undefined) return;
-      const group = await provider.createGroup(name, parentId);
-      await view.reveal(group, { select: true, focus: true, expand: true });
+      return view.editFolder({ parentId });
     }),
     register('quicklist.renameFolder', async (group) => {
       const current = provider.items.find((item) => item.type === 'group' && sameItem(item, group));
       if (!current) return;
-      const name = await vscode.window.showInputBox({
-        title: 'Rename Quicklist Folder', value: current.name,
-        validateInput: (value) => provider.validateGroupName(value, current.parentId, current.id),
-      });
-      if (name !== undefined) return provider.renameGroup(current.id, name);
+      return view.editFolder({ id: current.id, parentId: current.parentId, value: current.name });
     }),
     register('quicklist.moveToFolder', async (entry) => {
       const current = provider.items.find((item) => sameItem(item, entry));
@@ -153,9 +149,6 @@ function activate(context) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
     vscode.window.onDidChangeWindowState((event) => {
       if (event.focused) provider.refresh();
-    }),
-    view.onDidChangeVisibility((event) => {
-      if (event.visible) provider.refresh();
     })
   );
 
@@ -163,8 +156,8 @@ function activate(context) {
   return Object.freeze({ getItems: () => provider.items });
 }
 
-async function addWithFeedback(provider, uris, parentId) {
-  const result = await provider.addMany(uris, parentId);
+async function addWithFeedback(provider, uris, parentId, placement) {
+  const result = await provider.addMany(uris, parentId, placement);
   // Keep successful additions and duplicates silent, but report skipped targets
   // even when other members of a multi-selection were added successfully.
   const skipped = [];
@@ -239,12 +232,18 @@ class QuicklistProvider {
     this.refresh();
   }
 
-  addMany(uris, parentId) {
+  addMany(uris, parentId, placement) {
     const targets = Array.isArray(uris) ? uris.slice() : [];
     return this._enqueue(async () => {
       const result = { added: 0, duplicates: 0, outside: 0, unavailable: 0 };
       const next = this.items;
+      let destination;
+      if (placement) {
+        destination = this._dropDestination(next, placement.target, placement.position);
+        parentId = destination.parentId;
+      }
       this._requireGroup(next, parentId);
+      const added = [];
       const known = new Set(next.filter((entry) => entry.type !== 'group').map((entry) => entry.uri));
       for (const uri of targets) {
         if (!isResourceUri(uri)) {
@@ -266,14 +265,23 @@ class QuicklistProvider {
             result.unavailable++;
             continue;
           }
-          next.push(withParent({ uri: key, type }, { parentId }));
+          const entry = withParent({ uri: key, type }, { parentId });
+          next.push(entry);
+          added.push(entry);
           known.add(key);
           result.added++;
         } catch {
           result.unavailable++;
         }
       }
-      if (result.added) await this._save(next);
+      if (result.added) {
+        if (placement && placement.position !== 'inside') {
+          next.splice(next.length - added.length, added.length);
+          const index = next.indexOf(destination.target) + (placement.position === 'after' ? 1 : 0);
+          next.splice(index, 0, ...added);
+        }
+        await this._save(next);
+      }
       return result;
     });
   }
@@ -370,6 +378,47 @@ class QuicklistProvider {
       withParent(current, { parentId });
       await this._save(next);
     });
+  }
+
+  // Resolve the target and validate the entire move inside the write queue.
+  // A rejected drop must never partially move a selection or lose its order.
+  drop(entries, target, position = 'inside') {
+    return this._enqueue(async () => {
+      const items = this.items;
+      const { target: destination, parentId } = this._dropDestination(items, target, position);
+      const selected = [...new Set(entries.map((entry) => items.find((item) => sameItem(item, entry))).filter(Boolean))];
+      const moving = selected.filter((item) => !selected.some((ancestor) =>
+        ancestor.type === 'group' && ancestor !== item && this._isDescendant(items, item.parentId, ancestor.id)));
+      if (!moving.length || moving.includes(destination)) return;
+      this._requireGroup(items, parentId);
+      for (const item of moving) {
+        if (item.type === 'group' && this._isDescendant(items, parentId, item.id)) {
+          throw new Error('A folder cannot be moved into itself or one of its subfolders.');
+        }
+        delete item.parentId;
+        withParent(item, { parentId });
+      }
+      for (const item of moving) {
+        if (item.type !== 'group') continue;
+        const error = this.validateGroupName(item.name, parentId, item.id, items);
+        if (error) throw new Error(error);
+      }
+      const next = items.filter((item) => !moving.includes(item));
+      const index = position === 'inside' ? next.length :
+        next.indexOf(destination) + (position === 'after' ? 1 : 0);
+      next.splice(index, 0, ...moving);
+      if (JSON.stringify(next) !== JSON.stringify(this.items)) await this._save(next);
+    });
+  }
+
+  _dropDestination(items, target, position) {
+    if (!['inside', 'before', 'after'].includes(position)) throw new Error('Invalid drop position.');
+    const destination = target && items.find((item) => sameItem(item, target));
+    if ((target || position !== 'inside') && !destination) throw new Error('The drop destination no longer exists.');
+    if (position === 'inside' && destination && destination.type !== 'group') {
+      throw new Error('Drop inside a Quicklist folder or between items.');
+    }
+    return { target: destination, parentId: position === 'inside' ? destination?.id : destination.parentId };
   }
 
   removeGroup(id) {

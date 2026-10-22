@@ -2,12 +2,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
 
 function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
   const h = {
     state, commands: new Map(), executed: [], info: [], warnings: [], errors: [],
     existing: new Map(), events: {}, writes: 0, failNextWrite: false, statHook: undefined,
-    inputs: [], picks: [], inputOptions: [], pickOptions: [], reveals: [],
+    inputs: [], picks: [], inputOptions: [], pickOptions: [], messages: [],
   };
   class Uri {
     constructor(scheme, pathName, authority = '', query = '', fragment = '') {
@@ -23,6 +24,7 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
       if (!match) throw new Error('Invalid URI');
       return new Uri(match[1], decodeURIComponent(match[3]), match[2] || '', match[4] || '', match[5] || '');
     }
+    static joinPath(uri, ...parts) { return new Uri(uri.scheme, path.posix.join(uri.path, ...parts), uri.authority); }
   }
   class EventEmitter {
     constructor() {
@@ -80,11 +82,16 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
     },
     window: {
       activeTextEditor: undefined,
-      createTreeView(id, options) {
-        h.view = { id, provider: options.treeDataProvider,
-          reveal: async (entry, options) => { h.reveals.push([entry, options]); },
-          onDidChangeVisibility: event('viewVisibility'), dispose() {} };
-        return h.view;
+      registerWebviewViewProvider(id, presenter) {
+        h.presenter = presenter;
+        h.provider = presenter.provider;
+        h.view = { id, visible: true, show() {},
+          webview: { cspSource: 'https://webview.test', asWebviewUri: (uri) => uri,
+            postMessage: async (message) => { h.messages.push(structuredClone(message)); return true; },
+            onDidReceiveMessage: event('message') },
+          onDidChangeVisibility: event('viewVisibility'), onDidDispose: event('viewDispose') };
+        presenter.resolveWebviewView(h.view);
+        return { dispose() {} };
       },
       showInformationMessage: (text) => { h.info.push(text); return Promise.resolve(); },
       showWarningMessage: (text) => { h.warnings.push(text); return Promise.resolve(); },
@@ -123,6 +130,7 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
     },
   };
   h.context = {
+    extensionUri: new Uri('file', '/extension'),
     subscriptions: [],
     workspaceState: {
       get(key, fallback) { return state.has(key) ? state.get(key) : fallback; },
@@ -141,11 +149,13 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
   const source = fs.readFileSync(path.join(__dirname, '../../extension.js'), 'utf8');
   // Isolate the injected VS Code API without mutating Node's global module loader.
   new Function('require', 'module', 'exports', source)(
-    (id) => id === 'vscode' ? h.vscode : require(id), module, module.exports
+    (id) => id === 'vscode' ? h.vscode : createRequire(path.join(__dirname, '../../extension.js'))(id), module, module.exports
   );
   h.extension = module.exports;
   h.api = h.extension.activate(h.context);
-  h.provider = h.view.provider;
+  h.message = (message) => h.presenter.receive(message);
+  h.edit = (value) => h.message({ type: 'submitEdit', token: h.presenter.editing?.token, value });
+  h.cancel = () => h.message({ type: 'cancelEdit', token: h.presenter.editing?.token });
   h.call = (name, ...args) => h.commands.get(`quicklist.${name}`)(...args);
   h.resource = (name, type = 1) => {
     const uri = name.includes('://') ? Uri.parse(name) : new Uri('file', name);

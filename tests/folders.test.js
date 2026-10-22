@@ -8,8 +8,9 @@ test('new-folder command creates, reveals, and restores a folder alongside exist
   const h = makeHarness();
   const file = h.resource('/project/a.ts');
   await h.call('addFromExplorer', file);
-  h.inputs.push('  Work  ');
   await h.call('newFolder');
+  assert.equal(h.writes, 1, 'A draft must not create a folder in storage.');
+  await h.edit('  Work  ');
   const [entry, group] = h.provider.getChildren();
   assert.equal(entry.uri, file.toString());
   assert.equal(group.name, 'Work');
@@ -18,16 +19,18 @@ test('new-folder command creates, reveals, and restores a folder alongside exist
   assert.equal(item.collapsibleState, h.vscode.TreeItemCollapsibleState.Collapsed);
   assert.equal(item.contextValue, 'quicklistGroup');
   assert.equal(item.command, undefined);
-  assert.deepEqual(h.reveals[0], [group, { select: true, focus: true, expand: true }]);
+  assert.deepEqual(h.messages.at(-1), { type: 'reveal', key: `group:${group.id}` });
+  assert.equal(h.inputOptions.length, 0);
   assert.deepEqual(makeHarness({ state: h.state }).api.getItems(), h.api.getItems());
 });
 
 test('nested folders accept an active file and preserve its editor navigation', async () => {
   const h = makeHarness();
-  h.inputs.push('Work', 'Frontend');
   await h.call('newFolder');
+  await h.edit('Work');
   const group = h.provider.items[0];
   await h.call('newFolder', group);
+  await h.edit('Frontend');
   const child = h.provider.getChildren(group)[0];
   const uri = h.resource('/project/src/a.ts');
   h.active(uri);
@@ -38,8 +41,8 @@ test('nested folders accept an active file and preserve its editor navigation', 
   assert.deepEqual(h.provider.getParent(child), group);
   assert.deepEqual(h.provider.getParent(entry), child);
   await h.call('open', entry);
-  assert.equal(h.executed[0][0], 'vscode.open');
-  assert.equal(h.executed[0][1].toString(), uri.toString());
+  assert.equal(h.executed.at(-1)[0], 'vscode.open');
+  assert.equal(h.executed.at(-1)[1].toString(), uri.toString());
   const restored = makeHarness({ state: h.state });
   assert.deepEqual(restored.provider.getChildren(child), [entry]);
   // Adding a URI again does not duplicate it or silently change its folder.
@@ -59,7 +62,7 @@ test('moving files and real folder shortcuts into and out of groups preserves re
   assert.deepEqual(h.provider.getChildren(), [group]);
   assert.deepEqual(h.provider.getChildren(group).map((entry) => entry.uri), resources.map((entry) => entry.uri));
   await h.call('open', h.provider.getChildren(group)[1]);
-  assert.equal(h.executed[0][0], 'revealInExplorer');
+  assert.equal(h.executed.at(-1)[0], 'revealInExplorer');
   h.picks.push((items) => items.find((target) => target.parentId === undefined));
   await h.call('moveToFolder', resources[0]);
   assert.equal(h.provider.getChildren()[1].uri, resources[0].uri);
@@ -90,8 +93,8 @@ test('renaming folders trims names, preserves stable IDs, and validates sibling 
   const a = await h.provider.createGroup('A');
   await h.provider.createGroup('B');
   const child = await h.provider.createGroup('B', a.id);
-  h.inputs.push('  Renamed  ');
   await h.call('renameFolder', a);
+  await h.edit('  Renamed  ');
   const renamed = h.provider.items.find((item) => item.id === a.id);
   assert.equal(renamed.name, 'Renamed');
   assert.equal(h.provider.getParent(child).name, 'Renamed');
@@ -101,7 +104,7 @@ test('renaming folders trims names, preserves stable IDs, and validates sibling 
   await assert.rejects(h.provider.createGroup('x\ny'), /single line/);
   await assert.rejects(h.provider.createGroup('x'.repeat(101)), /100 characters/);
   await assert.rejects(h.provider.createGroup('B'), /already exists/);
-  assert.match(h.inputOptions[0].validateInput(' B '), /already exists/);
+  assert.equal(h.inputOptions.length, 0);
 });
 
 test('moving a group rejects duplicate destination names without changing storage', async () => {
@@ -153,12 +156,14 @@ test('removing a nested group promotes its files into the containing group', asy
   assert.equal(h.existing.size, 1);
 });
 
-test('cancelling folder dialogs and no-op operations do not write storage', async () => {
+test('cancelling inline folder edits and no-op operations do not write storage', async () => {
   const h = makeHarness();
   await h.call('newFolder');
+  await h.cancel();
   assert.equal(h.writes, 0);
   const group = await h.provider.createGroup('Work');
   await h.call('renameFolder', group);
+  await h.cancel();
   await h.call('moveToFolder', group);
   await h.provider.renameGroup(group.id, ' Work ');
   await h.provider.move(group, undefined);
@@ -167,7 +172,6 @@ test('cancelling folder dialogs and no-op operations do not write storage', asyn
   await h.call('moveToFolder');
   assert.equal(h.writes, 1);
   const empty = makeHarness({ roots: [] });
-  empty.inputs.push('Work');
   await empty.call('newFolder');
   assert.equal(empty.inputOptions.length, 0);
   assert.equal(empty.writes, 0);

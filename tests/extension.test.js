@@ -11,13 +11,13 @@ test('manifest contributes one Quicklist view with add-file and new-folder actio
   assert.equal(manifest.name, 'quicklist');
   assert.equal(manifest.displayName, 'Quicklist');
   assert.equal(manifest.publisher, 'xbghc');
-  assert.deepEqual(manifest.contributes.views, { explorer: [{ id: 'quicklist', name: 'Quicklist' }] });
+  assert.deepEqual(manifest.contributes.views, { explorer: [{ id: 'quicklist', name: 'Quicklist', type: 'webview' }] });
   const menu = manifest.contributes.menus['view/title'];
   assert.deepEqual(menu.filter((item) => item.group.startsWith('navigation')).map((item) => item.command),
     ['quicklist.addCurrentFile', 'quicklist.newFolder']);
   assert.equal(menu[0].command, 'quicklist.addCurrentFile');
   assert.ok(menu.every((item) => item.when === 'view == quicklist'));
-  const context = manifest.contributes.menus['view/item/context'];
+  const context = manifest.contributes.menus['webview/context'];
   assert.ok(context.some((item) => item.command === 'quicklist.moveToFolder'));
   assert.ok(context.some((item) => item.command === 'quicklist.removeFolder' && item.when.includes('quicklistGroup')));
   assert.equal(manifest.contributes.viewsContainers, undefined);
@@ -368,6 +368,7 @@ test('view visibility, focus, workspace, and file-operation events refresh the l
   h.events.create.fire(); h.events.delete.fire(); h.events.rename.fire(); h.events.workspaceFolders.fire();
   h.events.viewVisibility.fire({ visible: true });
   h.events.windowState.fire({ focused: true });
+  h.view.visible = false;
   h.events.viewVisibility.fire({ visible: false });
   h.events.windowState.fire({ focused: false });
   assert.equal(emitter.count, 6);

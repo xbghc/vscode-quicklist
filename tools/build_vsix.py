@@ -12,7 +12,7 @@ from xml.sax.saxutils import escape, quoteattr
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_FILES = ('package.json', 'extension.js', 'README.md', 'CHANGELOG.md', 'LICENSE')
+PACKAGE_FILES = ('package.json', 'extension.js', 'quicklist-view.js', 'media/quicklist.js', 'media/quicklist.css', 'README.md', 'CHANGELOG.md', 'LICENSE')
 
 
 def build(output=None):
@@ -60,7 +60,7 @@ def build(output=None):
 <Assets>{assets_xml}</Assets>
 </PackageManifest>
 '''
-    types = {'.js': 'application/javascript', '.json': 'application/json',
+    types = {'.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json',
              '.md': 'text/markdown', '.vsixmanifest': 'text/xml'}
     types_xml = ('<?xml version="1.0" encoding="utf-8"?>\n'
                  '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +

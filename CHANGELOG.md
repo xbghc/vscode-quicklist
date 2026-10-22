@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-10-22
+
+- Create and rename grouping folders directly in the sidebar, with Enter/Escape and inline validation.
+- Drag Quicklist items to reorder them, move between folders, or return to the root.
+- Import Explorer files and folders by holding Shift while dragging into the sidebar.
+- Preserve shortcut storage, nested contents, workspace checks, and persisted ordering.
+
 ## 0.2.0 - 2026-10-22
 
 - Create and rename grouping folders, including nested subfolders.

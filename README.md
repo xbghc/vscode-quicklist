@@ -8,7 +8,8 @@ Quicklist adds a lightweight view to the Explorer sidebar, letting you keep freq
 
 - **One-click add** - Add the active file using the `+` button.
 - **File and folder shortcuts** - Add files or folders from the Explorer context menu.
-- **Folder organization** - Create nested Quicklist folders, rename them, and move shortcuts between them.
+- **Inline folder editing** - Create and rename nested Quicklist folders directly in the sidebar.
+- **Drag and drop** - Reorder shortcuts, move them between folders, and import files or folders from Explorer.
 - **Quick navigation** - Click a file to open it, or a folder to reveal it in the native Explorer.
 - **Easy removal** - Remove shortcuts without affecting the original files.
 - **Workspace-specific** - Each workspace maintains its own list, preserved across restarts.
@@ -20,9 +21,13 @@ Quicklist adds a lightweight view to the Explorer sidebar, letting you keep freq
 
 **Add a folder:** Right-click it in Explorer and select **Add to Quicklist**. Multiple files and folders can be selected together.
 
-**Organize shortcuts:** Click **New Folder** in the Quicklist title to create a grouping folder. Right-click a Quicklist folder and choose **New Folder** to create a subfolder, or **Add Current File** to add the active file directly into it. These folders organize shortcuts only; they do not create directories on disk.
+**Organize shortcuts:** Click **New Folder** in the Quicklist title and type its name in the new sidebar row. Press **Enter** to create it or **Escape** to cancel. Empty names and duplicate sibling names show an error beside the input. Right-click a Quicklist folder and choose **New Folder** to create a subfolder, or **Add Current File** to add the active file directly into it. These folders organize shortcuts only; they do not create directories on disk.
 
-**Move or rename:** Right-click a shortcut or grouping folder and choose **Move to Folder…**. Select a folder or **Quicklist (root)** to move it. Use **Rename Folder** on a grouping folder to change its name. Folder names must be unique within their parent, ignoring case.
+**Move or rename:** Right-click a shortcut or grouping folder and choose **Move to Folder…**. Select a folder or **Quicklist (root)** to move it. Use **Rename Folder** (or **F2**) on a grouping folder to edit its name in place. Folder names must be unique within their parent, ignoring case.
+
+**Drag items:** Drop on the top or bottom edge of a row to reorder, in the middle of a grouping folder to move inside it, or on **Quicklist (root)** to move out. Ctrl/Cmd-click or Shift-click selects multiple items. Folder contents move with their grouping folder.
+
+**Drag from Explorer:** Hold **Shift** while dragging files or folders into Quicklist. VS Code requires this modifier to deliver external drops to sidebar Webviews. Drop into a grouping folder, between rows, or on the root area. Existing shortcuts are not duplicated or relocated by an Explorer drop.
 
 **Remove a grouping folder:** Choose **Remove Folder (Keep Contents)**. Its shortcuts and subfolders move up one level. If a promoted subfolder has the same name as a sibling, a numeric suffix is added to its name.
 
@@ -38,7 +43,7 @@ Download the `quicklist-vsix` artifact from a successful [CI run](https://github
 
 ## How it works
 
-- Items within each folder appear in the order they were originally added. Duplicate resource URIs are ignored across the entire list; use **Move to Folder…** to reorganize an existing shortcut.
+- Items within each folder keep their addition order until you reorder them. Duplicate resource URIs are ignored across the entire list; drag an existing Quicklist item or use **Move to Folder…** to reorganize it.
 - Only saved files and folders inside the current workspace can be added.
 - All folders in a multi-root workspace share one list.
 - Lists use VS Code's internal workspace storage, not project files. They are not shared through Git or synchronized between machines by this extension.
@@ -46,6 +51,7 @@ Download the `quicklist-vsix` artifact from a successful [CI run](https://github
 - Missing or unavailable entries stay visible and can be removed. Renamed or moved paths are not automatically updated.
 - The view refreshes on VS Code file operations, when it becomes visible, and when the window regains focus. Use **Quicklist: Refresh** after other external file-system changes.
 - Full resource URIs are preserved, including remote schemes and authorities.
+- The sidebar uses a Webview for inline editing, with VS Code theme colors and built-in file/folder symbols. Custom file icon themes are not applied inside the Webview.
 - No accounts, external services, telemetry, or runtime npm dependencies.
 
 ## Development
@@ -55,6 +61,14 @@ Use Node.js 22 or later. There is no compile step and unit tests require no depe
 ```sh
 npm run check
 ```
+
+To test the actual sidebar DOM and message handlers in Chromium (including inline editing, IME input, and drag/drop):
+
+```sh
+npm run test:webview
+```
+
+This requires `chromium` on PATH, or `QUICKLIST_BROWSER` set to a Chromium/Chrome executable. CI runs it on Linux with Google Chrome.
 
 Open this repository in VS Code and press **F5** to launch an Extension Development Host.
 

@@ -2,7 +2,7 @@
   "name": "quicklist",
   "displayName": "Quicklist",
   "description": "A minimal workspace file and folder shortcut list in Explorer.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "xbghc",
   "license": "MIT",
   "engines": {
@@ -40,22 +40,11 @@
       "explorer": [
         {
           "id": "quicklist",
-          "name": "Quicklist"
+          "name": "Quicklist",
+          "type": "webview"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "quicklist",
-        "contents": "Use the + button to add the active file.\n[Create a folder](command:quicklist.newFolder) to organize your shortcuts.\nRight-click a file or folder in Explorer and select Add to Quicklist.",
-        "when": "workspaceFolderCount > 0"
-      },
-      {
-        "view": "quicklist",
-        "contents": "Open a folder or workspace to start using Quicklist.",
-        "when": "workspaceFolderCount == 0"
-      }
-    ],
     "commands": [
       {
         "command": "quicklist.addCurrentFile",
@@ -84,7 +73,7 @@
       },
       {
         "command": "quicklist.moveToFolder",
-        "title": "Move to Folder…"
+        "title": "Move to Folder\u2026"
       },
       {
         "command": "quicklist.removeFolder",
@@ -122,38 +111,6 @@
           "group": "overflow@1"
         }
       ],
-      "view/item/context": [
-        {
-          "command": "quicklist.newFolder",
-          "when": "view == quicklist && viewItem == quicklistGroup",
-          "group": "navigation@1"
-        },
-        {
-          "command": "quicklist.addCurrentFile",
-          "when": "view == quicklist && viewItem == quicklistGroup",
-          "group": "navigation@2"
-        },
-        {
-          "command": "quicklist.renameFolder",
-          "when": "view == quicklist && viewItem == quicklistGroup",
-          "group": "quicklist@1"
-        },
-        {
-          "command": "quicklist.moveToFolder",
-          "when": "view == quicklist && viewItem =~ /^quicklist(Entry|Group)$/",
-          "group": "quicklist@2"
-        },
-        {
-          "command": "quicklist.removeFolder",
-          "when": "view == quicklist && viewItem == quicklistGroup",
-          "group": "quicklist@3"
-        },
-        {
-          "command": "quicklist.remove",
-          "when": "view == quicklist && viewItem == quicklistEntry",
-          "group": "inline@1"
-        }
-      ],
       "commandPalette": [
         {
           "command": "quicklist.renameFolder",
@@ -175,15 +132,48 @@
           "command": "quicklist.remove",
           "when": "false"
         }
+      ],
+      "webview/context": [
+        {
+          "command": "quicklist.newFolder",
+          "when": "webviewId == quicklist && webviewSection == quicklistGroup",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quicklist.addCurrentFile",
+          "when": "webviewId == quicklist && webviewSection == quicklistGroup",
+          "group": "navigation@2"
+        },
+        {
+          "command": "quicklist.renameFolder",
+          "when": "webviewId == quicklist && webviewSection == quicklistGroup",
+          "group": "quicklist@1"
+        },
+        {
+          "command": "quicklist.moveToFolder",
+          "when": "webviewId == quicklist && webviewSection =~ /^quicklist(Entry|Group)$/",
+          "group": "quicklist@2"
+        },
+        {
+          "command": "quicklist.removeFolder",
+          "when": "webviewId == quicklist && webviewSection == quicklistGroup",
+          "group": "quicklist@3"
+        },
+        {
+          "command": "quicklist.remove",
+          "when": "webviewId == quicklist && webviewSection == quicklistEntry",
+          "group": "quicklist@4"
+        }
       ]
     }
   },
   "scripts": {
-    "check": "node --check extension.js && node --check tests/run-vscode.js && node --check tests/integration/index.js && node --check tools/release.js && npm test",
-    "test": "node --test tests/extension.test.js tests/folders.test.js tests/release.test.js",
+    "check": "node --check extension.js && node --check quicklist-view.js && node --check media/quicklist.js && node --check tests/run-webview.js && node --check tests/run-vscode.js && node --check tests/integration/index.js && node --check tools/release.js && npm test",
+    "test": "node --test tests/extension.test.js tests/folders.test.js tests/webview.test.js tests/release.test.js",
     "test:integration": "node tests/run-vscode.js",
     "package": "npx --yes @vscode/vsce@3.6.2 package --no-dependencies",
     "package:offline": "python3 tools/build_vsix.py",
-    "test:setup": "npm install --no-save --package-lock=false --ignore-scripts @vscode/test-electron@3.1.0"
+    "test:setup": "npm install --no-save --package-lock=false --ignore-scripts @vscode/test-electron@3.1.0",
+    "test:webview": "node tests/run-webview.js"
   }
 }

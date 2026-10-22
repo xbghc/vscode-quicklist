@@ -35,6 +35,11 @@ jobs:
           node-version: '22'
       - name: Check syntax and run unit tests
         run: npm run check
+      - name: Check sidebar interactions in Chromium
+        if: runner.os == 'Linux'
+        env:
+          QUICKLIST_BROWSER: google-chrome
+        run: npm run test:webview
       - name: Check the offline package structure
         if: runner.os == 'Linux'
         run: python3 tools/test_vsix.py
