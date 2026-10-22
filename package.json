@@ -2,7 +2,7 @@
   "name": "quicklist",
   "displayName": "Quicklist",
   "description": "A minimal workspace file and folder shortcut list in Explorer.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "xbghc",
   "license": "MIT",
   "engines": {
@@ -47,7 +47,7 @@
     "viewsWelcome": [
       {
         "view": "quicklist",
-        "contents": "Use the + button to add the active file.\nRight-click a file or folder in Explorer and select Add to Quicklist.",
+        "contents": "Use the + button to add the active file.\n[Create a folder](command:quicklist.newFolder) to organize your shortcuts.\nRight-click a file or folder in Explorer and select Add to Quicklist.",
         "when": "workspaceFolderCount > 0"
       },
       {
@@ -73,6 +73,24 @@
         "icon": "$(close)"
       },
       {
+        "command": "quicklist.newFolder",
+        "title": "New Folder",
+        "category": "Quicklist",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "quicklist.renameFolder",
+        "title": "Rename Folder"
+      },
+      {
+        "command": "quicklist.moveToFolder",
+        "title": "Move to Folder…"
+      },
+      {
+        "command": "quicklist.removeFolder",
+        "title": "Remove Folder (Keep Contents)"
+      },
+      {
         "command": "quicklist.refresh",
         "title": "Refresh",
         "category": "Quicklist",
@@ -94,6 +112,11 @@
           "group": "navigation@1"
         },
         {
+          "command": "quicklist.newFolder",
+          "when": "view == quicklist",
+          "group": "navigation@2"
+        },
+        {
           "command": "quicklist.refresh",
           "when": "view == quicklist",
           "group": "overflow@1"
@@ -101,12 +124,49 @@
       ],
       "view/item/context": [
         {
+          "command": "quicklist.newFolder",
+          "when": "view == quicklist && viewItem == quicklistGroup",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quicklist.addCurrentFile",
+          "when": "view == quicklist && viewItem == quicklistGroup",
+          "group": "navigation@2"
+        },
+        {
+          "command": "quicklist.renameFolder",
+          "when": "view == quicklist && viewItem == quicklistGroup",
+          "group": "quicklist@1"
+        },
+        {
+          "command": "quicklist.moveToFolder",
+          "when": "view == quicklist && viewItem =~ /^quicklist(Entry|Group)$/",
+          "group": "quicklist@2"
+        },
+        {
+          "command": "quicklist.removeFolder",
+          "when": "view == quicklist && viewItem == quicklistGroup",
+          "group": "quicklist@3"
+        },
+        {
           "command": "quicklist.remove",
           "when": "view == quicklist && viewItem == quicklistEntry",
           "group": "inline@1"
         }
       ],
       "commandPalette": [
+        {
+          "command": "quicklist.renameFolder",
+          "when": "false"
+        },
+        {
+          "command": "quicklist.moveToFolder",
+          "when": "false"
+        },
+        {
+          "command": "quicklist.removeFolder",
+          "when": "false"
+        },
         {
           "command": "quicklist.addFromExplorer",
           "when": "false"
@@ -120,7 +180,7 @@
   },
   "scripts": {
     "check": "node --check extension.js && node --check tests/run-vscode.js && node --check tests/integration/index.js && node --check tools/release.js && npm test",
-    "test": "node --test tests/extension.test.js tests/release.test.js",
+    "test": "node --test tests/extension.test.js tests/folders.test.js tests/release.test.js",
     "test:integration": "node tests/run-vscode.js",
     "package": "npx --yes @vscode/vsce@3.6.2 package --no-dependencies",
     "package:offline": "python3 tools/build_vsix.py",

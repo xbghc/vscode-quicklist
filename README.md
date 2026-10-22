@@ -2,16 +2,17 @@
 
 A minimal file and folder shortcut list for Visual Studio Code.
 
-Quicklist adds a lightweight view to the Explorer sidebar, letting you keep frequently accessed files and folders in one place. No groups, no configuration, no extra sidebar icon.
+Quicklist adds a lightweight view to the Explorer sidebar, letting you keep frequently accessed files and folders in one place. Organize shortcuts into folders without configuration or an extra sidebar icon.
 
 ## Features
 
 - **One-click add** - Add the active file using the `+` button.
 - **File and folder shortcuts** - Add files or folders from the Explorer context menu.
+- **Folder organization** - Create nested Quicklist folders, rename them, and move shortcuts between them.
 - **Quick navigation** - Click a file to open it, or a folder to reveal it in the native Explorer.
 - **Easy removal** - Remove shortcuts without affecting the original files.
 - **Workspace-specific** - Each workspace maintains its own list, preserved across restarts.
-- **Minimal UI** - A flat list integrated into the Explorer sidebar.
+- **Minimal UI** - A shortcut tree integrated into the Explorer sidebar.
 
 ## Usage
 
@@ -19,7 +20,13 @@ Quicklist adds a lightweight view to the Explorer sidebar, letting you keep freq
 
 **Add a folder:** Right-click it in Explorer and select **Add to Quicklist**. Multiple files and folders can be selected together.
 
-**Navigate:** Click a file to open it in the editor. Click a folder to reveal it in the native Explorer; folders do not expand inside Quicklist.
+**Organize shortcuts:** Click **New Folder** in the Quicklist title to create a grouping folder. Right-click a Quicklist folder and choose **New Folder** to create a subfolder, or **Add Current File** to add the active file directly into it. These folders organize shortcuts only; they do not create directories on disk.
+
+**Move or rename:** Right-click a shortcut or grouping folder and choose **Move to Folder…**. Select a folder or **Quicklist (root)** to move it. Use **Rename Folder** on a grouping folder to change its name. Folder names must be unique within their parent, ignoring case.
+
+**Remove a grouping folder:** Choose **Remove Folder (Keep Contents)**. Its shortcuts and subfolders move up one level. If a promoted subfolder has the same name as a sibling, a numeric suffix is added to its name.
+
+**Navigate:** Click a file to open it in the editor. Expand a grouping folder to see its shortcuts. Click a real folder shortcut to reveal it in the native Explorer; real folder shortcuts do not expand into directory trees inside Quicklist.
 
 **Remove an item:** Hover over it and click `x`. This only removes the shortcut, never the actual file or folder.
 
@@ -31,10 +38,11 @@ Download the `quicklist-vsix` artifact from a successful [CI run](https://github
 
 ## How it works
 
-- Items appear in the order they were added. Duplicate resource URIs are ignored.
+- Items within each folder appear in the order they were originally added. Duplicate resource URIs are ignored across the entire list; use **Move to Folder…** to reorganize an existing shortcut.
 - Only saved files and folders inside the current workspace can be added.
 - All folders in a multi-root workspace share one list.
 - Lists use VS Code's internal workspace storage, not project files. They are not shared through Git or synchronized between machines by this extension.
+- Folder names, nesting, and shortcut locations persist with each workspace. Existing flat lists continue to appear at the root.
 - Missing or unavailable entries stay visible and can be removed. Renamed or moved paths are not automatically updated.
 - The view refreshes on VS Code file operations, when it becomes visible, and when the window regains focus. Use **Quicklist: Refresh** after other external file-system changes.
 - Full resource URIs are preserved, including remote schemes and authorities.

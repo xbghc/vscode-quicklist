@@ -7,6 +7,7 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
   const h = {
     state, commands: new Map(), executed: [], info: [], warnings: [], errors: [],
     existing: new Map(), events: {}, writes: 0, failNextWrite: false, statHook: undefined,
+    inputs: [], picks: [], inputOptions: [], pickOptions: [], reveals: [],
   };
   class Uri {
     constructor(scheme, pathName, authority = '', query = '', fragment = '') {
@@ -46,7 +47,7 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
   };
   class TreeItem {
     constructor(uri, collapsibleState) {
-      this.label = path.posix.basename(uri.path);
+      this.label = typeof uri === 'string' ? uri : path.posix.basename(uri.path);
       this.collapsibleState = collapsibleState;
     }
   }
@@ -65,7 +66,7 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
   ).sort((a, b) => b.uri.path.length - a.uri.path.length)[0];
   h.vscode = {
     Uri, EventEmitter, TreeItem, ThemeIcon,
-    TreeItemCollapsibleState: { None: 0 },
+    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
     commands: {
       registerCommand(name, handler) {
@@ -81,12 +82,19 @@ function makeHarness({ state = new Map(), roots = ['file:///project'] } = {}) {
       activeTextEditor: undefined,
       createTreeView(id, options) {
         h.view = { id, provider: options.treeDataProvider,
+          reveal: async (entry, options) => { h.reveals.push([entry, options]); },
           onDidChangeVisibility: event('viewVisibility'), dispose() {} };
         return h.view;
       },
       showInformationMessage: (text) => { h.info.push(text); return Promise.resolve(); },
       showWarningMessage: (text) => { h.warnings.push(text); return Promise.resolve(); },
       showErrorMessage: (text) => { h.errors.push(text); return Promise.resolve(); },
+      showInputBox: async (options) => { h.inputOptions.push(options); return h.inputs.shift(); },
+      showQuickPick: async (items, options) => {
+        h.pickOptions.push({ items, options });
+        const pick = h.picks.shift();
+        return typeof pick === 'function' ? pick(items) : pick;
+      },
       onDidChangeWindowState: event('windowState'),
     },
     workspace: {

@@ -7,16 +7,19 @@ const { makeHarness } = require('./helpers/harness');
 
 const keys = (h) => h.provider.items.map((entry) => entry.uri);
 
-test('manifest contributes one Quicklist view and only a plus button in its title', () => {
+test('manifest contributes one Quicklist view with add-file and new-folder actions', () => {
   assert.equal(manifest.name, 'quicklist');
   assert.equal(manifest.displayName, 'Quicklist');
   assert.equal(manifest.publisher, 'xbghc');
   assert.deepEqual(manifest.contributes.views, { explorer: [{ id: 'quicklist', name: 'Quicklist' }] });
   const menu = manifest.contributes.menus['view/title'];
-  assert.equal(menu.filter((item) => item.group.startsWith('navigation')).length, 1);
+  assert.deepEqual(menu.filter((item) => item.group.startsWith('navigation')).map((item) => item.command),
+    ['quicklist.addCurrentFile', 'quicklist.newFolder']);
   assert.equal(menu[0].command, 'quicklist.addCurrentFile');
   assert.ok(menu.every((item) => item.when === 'view == quicklist'));
-  assert.equal(manifest.contributes.menus['view/item/context'].length, 1);
+  const context = manifest.contributes.menus['view/item/context'];
+  assert.ok(context.some((item) => item.command === 'quicklist.moveToFolder'));
+  assert.ok(context.some((item) => item.command === 'quicklist.removeFolder' && item.when.includes('quicklistGroup')));
   assert.equal(manifest.contributes.viewsContainers, undefined);
   assert.equal(manifest.contributes.configuration, undefined);
   assert.equal(manifest.dependencies, undefined);
@@ -26,6 +29,9 @@ test('all contributed commands are registered and context-only commands stay out
   const h = makeHarness();
   for (const command of manifest.contributes.commands) assert.ok(h.commands.has(command.command));
   assert.deepEqual(manifest.contributes.menus.commandPalette, [
+    { command: 'quicklist.renameFolder', when: 'false' },
+    { command: 'quicklist.moveToFolder', when: 'false' },
+    { command: 'quicklist.removeFolder', when: 'false' },
     { command: 'quicklist.addFromExplorer', when: 'false' },
     { command: 'quicklist.remove', when: 'false' },
   ]);

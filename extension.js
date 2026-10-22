@@ -4,10 +4,17 @@
 // Original copyright and permission terms are retained in LICENSE.
 const vscode = require('vscode');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 
 const STATE_KEY = 'quicklist.items';
 
-/** @typedef {{ uri: string, type: 'file' | 'folder' }} Entry */
+/** @typedef {{ uri: string, type: 'file' | 'folder', parentId?: string }} Entry */
+/** @typedef {{ id: string, type: 'group', name: string, parentId?: string }} Group */
+
+function withParent(item, value) {
+  if (typeof value.parentId === 'string' && value.parentId) item.parentId = value.parentId;
+  return item;
+}
 
 function isResourceUri(uri) {
   return Boolean(uri && typeof uri.scheme === 'string' && uri.scheme &&
@@ -20,10 +27,22 @@ function parseEntry(value) {
       (value.type !== 'file' && value.type !== 'folder')) return undefined;
   try {
     const uri = vscode.Uri.parse(value.uri, true);
-    return isResourceUri(uri) ? { uri: uri.toString(), type: value.type } : undefined;
+    return isResourceUri(uri) ? withParent({ uri: uri.toString(), type: value.type }, value) : undefined;
   } catch {
     return undefined;
   }
+}
+
+function parseItem(value) {
+  if (value?.type !== 'group') return parseEntry(value);
+  if (typeof value.id !== 'string' || !value.id || typeof value.name !== 'string' ||
+      !value.name.trim() || value.name.trim().length > 100 || /[\r\n]/.test(value.name)) return undefined;
+  return withParent({ id: value.id, type: 'group', name: value.name.trim() }, value);
+}
+
+function sameItem(a, b) {
+  return a?.type === 'group' ? b?.type === 'group' && a.id === b.id :
+    Boolean(a?.uri && b?.type !== 'group' && a.uri === b?.uri);
 }
 
 function resourceType(stat) {
@@ -53,13 +72,13 @@ function activate(context) {
   context.subscriptions.push(
     provider,
     view,
-    register('quicklist.addCurrentFile', async () => {
+    register('quicklist.addCurrentFile', async (group) => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.isUntitled) {
         void vscode.window.showInformationMessage('Open a saved workspace file to add it to Quicklist.');
         return;
       }
-      return addWithFeedback(provider, [editor.document.uri]);
+      return addWithFeedback(provider, [editor.document.uri], group?.type === 'group' ? group.id : undefined);
     }),
     register('quicklist.addFromExplorer', (uri, selectedUris) => {
       // Ignore a stale multi-selection when its right-click target is not selected.
@@ -70,7 +89,43 @@ function activate(context) {
       return targets.length ? addWithFeedback(provider, targets) : undefined;
     }),
     register('quicklist.remove', (entry) => {
+      if (entry?.type === 'group') return provider.removeGroup(entry.id);
       if (entry && typeof entry.uri === 'string') return provider.remove(entry.uri);
+      return undefined;
+    }),
+    register('quicklist.newFolder', async (parent) => {
+      if (!vscode.workspace.workspaceFolders?.length) {
+        void vscode.window.showInformationMessage('Open a folder or workspace to create a Quicklist folder.');
+        return;
+      }
+      const parentId = parent?.type === 'group' ? parent.id : undefined;
+      const name = await vscode.window.showInputBox({
+        title: 'New Quicklist Folder', prompt: 'Name this folder for organizing shortcuts.',
+        validateInput: (value) => provider.validateGroupName(value, parentId),
+      });
+      if (name === undefined) return;
+      const group = await provider.createGroup(name, parentId);
+      await view.reveal(group, { select: true, focus: true, expand: true });
+    }),
+    register('quicklist.renameFolder', async (group) => {
+      const current = provider.items.find((item) => item.type === 'group' && sameItem(item, group));
+      if (!current) return;
+      const name = await vscode.window.showInputBox({
+        title: 'Rename Quicklist Folder', value: current.name,
+        validateInput: (value) => provider.validateGroupName(value, current.parentId, current.id),
+      });
+      if (name !== undefined) return provider.renameGroup(current.id, name);
+    }),
+    register('quicklist.moveToFolder', async (entry) => {
+      const current = provider.items.find((item) => sameItem(item, entry));
+      if (!current) return;
+      const target = await vscode.window.showQuickPick(provider.moveTargets(current), {
+        title: 'Move to Quicklist Folder', placeHolder: 'Choose a destination folder',
+      });
+      if (target) return provider.move(current, target.parentId);
+    }),
+    register('quicklist.removeFolder', (group) => {
+      if (group?.type === 'group') return provider.removeGroup(group.id);
       return undefined;
     }),
     register('quicklist.refresh', () => provider.refresh()),
@@ -108,8 +163,8 @@ function activate(context) {
   return Object.freeze({ getItems: () => provider.items });
 }
 
-async function addWithFeedback(provider, uris) {
-  const result = await provider.addMany(uris);
+async function addWithFeedback(provider, uris, parentId) {
+  const result = await provider.addMany(uris, parentId);
   // Keep successful additions and duplicates silent, but report skipped targets
   // even when other members of a multi-selection were added successfully.
   const skipped = [];
@@ -135,17 +190,33 @@ class QuicklistProvider {
     this._onDidChangeTreeData.dispose();
   }
 
-  /** @returns {Entry[]} New objects prevent consumers from mutating stored state. */
+  /** @returns {(Entry | Group)[]} New objects prevent consumers from mutating stored state. */
   get items() {
     const saved = this.workspaceState.get(STATE_KEY, []);
     if (!Array.isArray(saved)) return [];
     const seen = new Set();
     const items = [];
     for (const value of saved) {
-      const entry = parseEntry(value);
-      if (entry && !seen.has(entry.uri)) {
-        seen.add(entry.uri);
+      const entry = parseItem(value);
+      const key = entry?.type === 'group' ? `group:${entry.id}` : `resource:${entry?.uri}`;
+      if (entry && !seen.has(key)) {
+        seen.add(key);
         items.push(entry);
+      }
+    }
+    // Old flat lists need no migration. Recover orphaned or cyclic records at
+    // the root so corrupt folder metadata never hides an existing shortcut.
+    const groups = new Map(items.filter((item) => item.type === 'group').map((item) => [item.id, item]));
+    for (const item of items) {
+      const ancestors = new Set(item.type === 'group' ? [item.id] : []);
+      let parentId = item.parentId;
+      while (parentId) {
+        if (!groups.has(parentId) || ancestors.has(parentId)) {
+          delete item.parentId;
+          break;
+        }
+        ancestors.add(parentId);
+        parentId = groups.get(parentId).parentId;
       }
     }
     return items;
@@ -168,12 +239,13 @@ class QuicklistProvider {
     this.refresh();
   }
 
-  addMany(uris) {
+  addMany(uris, parentId) {
     const targets = Array.isArray(uris) ? uris.slice() : [];
     return this._enqueue(async () => {
       const result = { added: 0, duplicates: 0, outside: 0, unavailable: 0 };
       const next = this.items;
-      const known = new Set(next.map((entry) => entry.uri));
+      this._requireGroup(next, parentId);
+      const known = new Set(next.filter((entry) => entry.type !== 'group').map((entry) => entry.uri));
       for (const uri of targets) {
         if (!isResourceUri(uri)) {
           result.unavailable++;
@@ -194,7 +266,7 @@ class QuicklistProvider {
             result.unavailable++;
             continue;
           }
-          next.push({ uri: key, type });
+          next.push(withParent({ uri: key, type }, { parentId }));
           known.add(key);
           result.added++;
         } catch {
@@ -214,15 +286,137 @@ class QuicklistProvider {
     });
   }
 
-  getChildren(element) {
-    return element ? [] : this.items;
+  _requireGroup(items, id) {
+    if (id !== undefined && !items.some((item) => item.type === 'group' && item.id === id)) {
+      throw new Error('This Quicklist folder no longer exists.');
+    }
   }
 
-  getParent() {
+  validateGroupName(name, parentId, exceptId, items = this.items) {
+    if (typeof name !== 'string' || !name.trim()) return 'Enter a folder name.';
+    if (name.trim().length > 100 || /[\r\n]/.test(name)) return 'Use a single line of 100 characters or fewer.';
+    if (items.some((item) => item.type === 'group' && item.id !== exceptId &&
+        item.parentId === parentId && item.name.toLowerCase() === name.trim().toLowerCase())) {
+      return 'A folder with this name already exists here.';
+    }
     return undefined;
   }
 
+  createGroup(name, parentId) {
+    return this._enqueue(async () => {
+      const next = this.items;
+      this._requireGroup(next, parentId);
+      const error = this.validateGroupName(name, parentId, undefined, next);
+      if (error) throw new Error(error);
+      const group = withParent({ id: randomUUID(), type: 'group', name: name.trim() }, { parentId });
+      next.push(group);
+      await this._save(next);
+      return { ...group };
+    });
+  }
+
+  renameGroup(id, name) {
+    return this._enqueue(async () => {
+      const next = this.items;
+      const group = next.find((item) => item.type === 'group' && item.id === id);
+      if (!group) return;
+      const error = this.validateGroupName(name, group.parentId, id, next);
+      if (error) throw new Error(error);
+      if (group.name === name.trim()) return;
+      group.name = name.trim();
+      await this._save(next);
+    });
+  }
+
+  _isDescendant(items, parentId, id) {
+    while (parentId) {
+      if (parentId === id) return true;
+      parentId = items.find((item) => item.type === 'group' && item.id === parentId)?.parentId;
+    }
+    return false;
+  }
+
+  moveTargets(entry) {
+    const items = this.items;
+    const targets = [{ label: 'Quicklist (root)', parentId: undefined }];
+    const visit = (parentId, prefix = '') => {
+      for (const group of items.filter((item) => item.type === 'group' && item.parentId === parentId)) {
+        if (sameItem(group, entry)) continue;
+        const label = prefix + group.name;
+        targets.push({ label, parentId: group.id });
+        visit(group.id, `${label} / `);
+      }
+    };
+    visit(undefined);
+    return targets.filter((target) => target.parentId !== entry.parentId &&
+      (entry.type !== 'group' || !this.validateGroupName(entry.name, target.parentId, entry.id, items)));
+  }
+
+  move(entry, parentId) {
+    return this._enqueue(async () => {
+      const next = this.items;
+      const current = next.find((item) => sameItem(item, entry));
+      if (!current) return;
+      this._requireGroup(next, parentId);
+      if (current.type === 'group') {
+        if (this._isDescendant(next, parentId, current.id)) {
+          throw new Error('A folder cannot be moved into itself or one of its subfolders.');
+        }
+        const error = this.validateGroupName(current.name, parentId, current.id, next);
+        if (error) throw new Error(error);
+      }
+      if (current.parentId === parentId) return;
+      delete current.parentId;
+      withParent(current, { parentId });
+      await this._save(next);
+    });
+  }
+
+  removeGroup(id) {
+    return this._enqueue(async () => {
+      const previous = this.items;
+      const group = previous.find((item) => item.type === 'group' && item.id === id);
+      if (!group) return;
+      const next = previous.filter((item) => item !== group);
+      for (const item of next.filter((item) => item.parentId === id)) {
+        delete item.parentId;
+        withParent(item, group);
+        // Promoted folders keep their contents and get a unique sibling name.
+        if (item.type === 'group') {
+          const base = item.name;
+          let suffix = 2;
+          while (this.validateGroupName(item.name, item.parentId, item.id, next)) {
+            const ending = ` (${suffix++})`;
+            item.name = base.slice(0, 100 - ending.length) + ending;
+          }
+        }
+      }
+      await this._save(next);
+    });
+  }
+
+  getChildren(element) {
+    if (element && element.type !== 'group') return [];
+    const items = this.items;
+    if (element && !items.some((item) => sameItem(item, element))) return [];
+    return items.filter((item) => item.parentId === element?.id);
+  }
+
+  getParent(element) {
+    const items = this.items;
+    const current = items.find((item) => sameItem(item, element));
+    return items.find((item) => item.type === 'group' && item.id === current?.parentId);
+  }
+
   async getTreeItem(entry) {
+    if (entry.type === 'group') {
+      const item = new vscode.TreeItem(entry.name, vscode.TreeItemCollapsibleState.Collapsed);
+      item.id = `group:${entry.id}`;
+      item.contextValue = 'quicklistGroup';
+      item.iconPath = new vscode.ThemeIcon('folder');
+      item.tooltip = `${entry.name} — Quicklist folder`;
+      return item;
+    }
     const uri = vscode.Uri.parse(entry.uri);
     const item = new vscode.TreeItem(uri, vscode.TreeItemCollapsibleState.None);
     item.id = entry.uri;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 - 2026-10-22
+
+- Create and rename grouping folders, including nested subfolders.
+- Move shortcuts or whole groups to another folder or back to the Quicklist root.
+- Add the active file directly to a group from its context menu.
+- Remove grouping folders while keeping their contents one level up.
+- Preserve existing flat lists and persist folder organization per workspace.
+
 ## 0.1.0
 
 - Add a flat Quicklist view to Explorer.
