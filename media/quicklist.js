@@ -3,7 +3,6 @@
 (() => {
   const vscode = acquireVsCodeApi();
   const tree = document.getElementById('tree');
-  const empty = document.getElementById('empty');
   const rootDrop = document.getElementById('root-drop');
   const status = document.getElementById('status');
   const mime = 'application/vnd.quicklist.items';
@@ -88,7 +87,6 @@
     // Replacing a focused input can trigger blur; only a user blur commits it.
     if (input) input.onblur = null;
     tree.replaceChildren();
-    empty.replaceChildren();
     if (editing) expandAncestors(editing);
 
     function append(parent, parentId, depth) {
@@ -176,17 +174,6 @@
       });
     }
     append(tree, undefined, 1);
-    if (!items.length && !editing) {
-      empty.append(document.createTextNode(hasWorkspace ? 'Drag files here or use + to add the active file. ' :
-        'Open a folder or workspace to start using Quicklist.'));
-      if (hasWorkspace) {
-        const button = document.createElement('button');
-        button.className = 'link';
-        button.textContent = 'Create a folder';
-        button.onclick = () => action('newFolder');
-        empty.append(button);
-      }
-    }
     if (focused && !nodeFor(focused)) focused = nodes()[0]?.dataset.key;
     updateSelection();
     if (editing) {
@@ -383,7 +370,7 @@
     if (data.type === 'state') {
       items = data.items;
       hasWorkspace = data.hasWorkspace;
-      document.getElementById('drag-help').hidden = !hasWorkspace;
+      document.getElementById('drag-help').hidden = !hasWorkspace || !items.length;
       if (data.editing?.token !== editing?.token) editing = data.editing ? { ...data.editing, focus: true } : undefined;
       else if (editing && data.editing?.error) {
         editing.error = data.editing.error;

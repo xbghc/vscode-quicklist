@@ -43,8 +43,8 @@ class QuicklistView {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${escapeHtml(webview.cspSource)}; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${resource('quicklist.css')}"><title>Quicklist</title></head>
 <body><main id="tree" role="tree" aria-label="Quicklist" aria-multiselectable="true" tabindex="0"></main>
-<p id="empty"></p><div id="root-drop" aria-label="Move to Quicklist root">Quicklist (root)</div>
-<p id="drag-help">Hold Shift while dragging from Explorer.</p>
+<div id="root-drop" aria-label="Move to Quicklist root">Quicklist (root)</div>
+<p id="drag-help" hidden>Hold Shift while dragging from Explorer.</p>
 <div id="status" role="status" aria-live="polite"></div>
 <script nonce="${nonce}" src="${resource('quicklist.js')}"></script></body></html>`;
     this.viewDisposables.push(

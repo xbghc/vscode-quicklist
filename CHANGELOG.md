@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 - 2026-10-23
+
+- Keep an empty Quicklist blank by removing welcome instructions and the empty-state folder link.
+- Show the Explorer drag hint only when Quicklist contains items.
+
 ## 0.3.0 - 2026-10-22
 
 - Create and rename grouping folders directly in the sidebar, with Enter/Escape and inline validation.

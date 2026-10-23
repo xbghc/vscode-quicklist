@@ -101,7 +101,8 @@ async function main() {
     await send('Runtime.addBinding', { name: 'quicklistMessage' });
     await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 600, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
-    await wait(() => evaluate(`document.getElementById('empty')?.textContent.includes('Drag files')`));
+    await wait(() => h.messages.some((message) => message.type === 'state'));
+    await wait(() => evaluate(`document.body.innerText.trim() === ''`));
     const enterName = async (name, options = '') => {
       await evaluate(`(() => { const input = document.querySelector('input'); input.value = ${JSON.stringify(name)};
         input.dispatchEvent(new Event('input', { bubbles: true }));

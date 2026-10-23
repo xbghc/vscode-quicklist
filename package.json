@@ -2,7 +2,7 @@
   "name": "quicklist",
   "displayName": "Quicklist",
   "description": "A minimal workspace file and folder shortcut list in Explorer.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "xbghc",
   "license": "MIT",
   "engines": {
